@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { FormControl } from '@angular/forms';
-import { Observable } from 'rxjs';
-import { map, startWith } from 'rxjs/operators';
+import { HttpClient } from '@angular/common/http';
+
+import { debounceTime, tap, switchMap, finalize } from 'rxjs/operators';
 
 @Component({
   selector: 'app-root',
@@ -10,21 +11,50 @@ import { map, startWith } from 'rxjs/operators';
 })
 export class AppComponent implements OnInit {
   title = 'ng-autocomplete';
-  myControl = new FormControl();
-  options: string[] = ['One', 'Two', 'Three'];
-  filteredOptions: Observable<string[]>;
+
+  searchMoviesCtrl = new FormControl();
+  filteredMovies: any;
+  isLoading = false;
+  errorMsg: string;
+
+  constructor(private http: HttpClient) { }
 
   ngOnInit() {
-    this.filteredOptions = this.myControl.valueChanges
-      .pipe(
-        startWith(''),
-        map(value => this._filter(value))
-      );
+    this.searchMoviesCtrl.valueChanges.pipe(
+      debounceTime(500),
+      tap(() => {
+        this.errorMsg = '';
+        this.filteredMovies = [];
+        this.isLoading = true;
+      }),
+      switchMap(value => this.http.get('http://www.omdbapi.com/?apikey=f5ccd456&t=' + value)
+        .pipe(
+          finalize(() => {
+            this.isLoading = false;
+          }),
+        )
+      )
+    )
+      .subscribe(data => {
+        // tslint:disable-next-line: no-string-literal
+        if (data['Response'] === 'false') {
+          // tslint:disable-next-line: no-string-literal
+          this.errorMsg = data['Error'];
+          this.filteredMovies = [];
+        } else {
+          this.errorMsg = '';
+          // tslint:disable-next-line: no-string-literal
+          this.filteredMovies = data['Search'];
+        }
+
+        // tslint:disable-next-line: no-string-literal
+        console.log(this.filteredMovies['Title']);
+        // tslint:disable-next-line: no-string-literal
+        this.displayFn(this.filteredMovies['Title']);
+      });
   }
 
-  private _filter(value: string): string[] {
-    const filterValue = value.toLowerCase();
-
-    return this.options.filter(option => option.toLowerCase().includes(filterValue));
+  displayFn(movie) {
+    return movie;
   }
 }
